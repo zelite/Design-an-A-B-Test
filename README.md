@@ -2,4 +2,4 @@
 
 This is the project for the Udacity Data Analyst Nanodegree.
 
-Check here the [final report](https://github.com/zelite/Design-an-A-B-Test).
+Check here the [final report](https://zelite.github.io/Design-an-A-B-Test/).
