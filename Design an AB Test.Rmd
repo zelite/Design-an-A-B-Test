@@ -1,0 +1,374 @@
+---
+title: "Design an A/B Test"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+On this project I will analyse an experiment conducted by Udacity. When the experiment was made, the Udacity courses featured two options to experience the courses.
+
+* "start free trial" - the student was asked their credit card information and then will be enrolled in a 14 day free trial of the paid course version. After the 14 days, the credit card would be automatically charged if the student the not cancel the course subscrition before.
+
+* "access course materials" - the student is able to view the course videos and solve the quizzes for free, but do not get support from coaches, do not get a verified certificate and cannot submit their final project for feedback.
+
+For the experiment, a change was tested, where after a student clicked "start free trial", they would be asked how much time they could commit to the course. If they had more than 5 hours per week, they would be taken to the checkout as usual. If they had less than 5 hours per week a message would inform that the Udacity courses require a greater time commitment for successful completion and suggest the free version instead. The student would have the option to continue the enrollment anyway.
+
+The screenshot below shows how the experiment looked like:
+
+
+![](Final Project- Experiment Screenshot.png)
+
+
+The hypothesis behind the experiment was that this might set clearer expectations to the students, reducing the ammount of frutrated students who left the free trial because they did not have enough time and at the same time not reducing significantly the number of students who stay enrolled and complete the course. If the hypothesis turns out to be true, then the overall student experience could improve because coaches would be able to better support the students which will complete the course.
+
+The unit of diversion on this experiment is a cookie. However, after enrollment in the free trial, the students are tracked by the user-id from that point forward. A user-id cannot be enrolled twice in the free trial.
+
+## Experiment Design
+### Metric Choice
+
+The metrics below were considered for this experiment. $d_{min}$ is the pratical significance boundary for each metric.
+
+
+* __Number of cookies:__ That is, number of unique cookies to view the course overview page. ($d_{min}=3000$)
+
+* __Number of user-ids__: That is, number of users who enroll in the free trial. ($d_{min}=50$)
+
+* __Number of clicks__: That is, number of unique cookies to click the "Start free trial" button (which happens before the free trial screener is trigger). ($d_{min}=240$)
+
+* __Click-through-probability__: That is, number of unique cookies to click the "Start free trial" button divided by number of unique cookies to view the course overview page. ($d_{min}=0.01$)
+
+* __Gross conversion__: That is, number of user-ids to complete checkout and enroll in the free trial divided by number of unique cookies to click the "Start free trial" button. ($d_{min}= 0.01$)
+
+* __Retention__: That is, number of user-ids to remain enrolled past the 14-day boundary (and thus make at least one payment) divided by number of user-ids to complete checkout. ($d_{min}=0.01$)
+
+* __Net conversion__: That is, number of user-ids to remain enrolled past the 14-day boundary (and thus make at least one payment) divided by the number of unique cookies to click the "Start free trial" button. ($d_{min}= 0.0075$)
+
+#### Invariant metrics
+
+First we need to decide which metrics to use as invariant metrics. That is, which metrics should stay constant in both control and experimental groups.
+
+* __Number of cookies:__ since we will randomly assign a cookie to either the experimental and control group, we expect that both groups have the same number of cookies.
+
+* __Number of clicks:__ a visitor needs to click the "start free trial" button before he gets to the point of the experiment. So we also expect that the both groups have the same number of clicks.
+
+* __Click-through probability__: the click through probability is the number of cookies which actually click the button divided by the number of cookies which view the course page. Since the click happens before the experiment, we should also expect it to be constant across groups.
+
+#### Evaluation metrics
+
+
+
+* __Gross conversion__: the gross conversion tells us the percentage of students that enroll on the course after clicking the "Start free trial button". This is a good metric for how experiment because it allows us to measure if there is an effect of the experiment screener on the enrolling. If our hypothesis turns out to be true, we expect the gross conversion to decrease, since students which to not have so much time to commit are less likely to enroll.
+
+
+* __Net conversion__: Net conversion tells us which students stay enrolled and end up making at least a payment. We want our experiment to not affect the net conversion. We want to keep the same proportion of students to stay enrolled and payment.
+
+#### Unused metrics
+
+* __Number of user-ids__: the number of user-ids is not a good metric because it can change due to differences in traffic which are not related to the effect of the experiment.
+
+* __Retention__: This would be a good metric, because it tells us exactly, from the students who enroll in the course, the proportion which made a payment. However, because the unit of analysis is the number of students which enrolled, we need a higher ammount of pageviews to be able to compute this metric. This would make the experiment exposure time too long for Udacity goals.
+
+
+
+
+### Measuring Variability
+
+To calculate the standard deviation of a proportion we can use the following formula:
+
+$$\sigma = \sqrt{\frac{p * (1-p)}{n}}$$
+
+where $p$ is the expected proportion and $n$ is the sample number. 
+
+```{r echo=FALSE}
+sd_proportion <- function(p, n){
+  sqrt(p*(1-p)/n)
+}
+
+```
+
+
+Based on the [baseline values](Final Project Baseline Values.csv), we know that $p$ for the gross conversion, is the probability of enrolling given click, $p=0.20625$, and the net conversion, is the probability of payment given click, $p=0.1093125$. We have a sample size of 5000 cookies, which correspond to the following ammount of unique cookies which click the "start free trial":
+
+```{r}
+#unique cookies per day
+u_cookies <- 40000
+u_clicks <- 3200
+
+#for 5000 cookies:
+n <- u_clicks/u_cookies * 5000
+n
+
+```
+
+Then the standard deviations are:
+
+```{r}
+#stdev net conversion
+sd_proportion(0.20625, n)
+#stdev gross conversion
+sd_proportion(0.1093125, n)
+
+```
+
+The unit of analysis of both our evaluation metrics is the number of unique cookies. Since this matches our unit of diversion, it is safe to assume that the empirically variability is similar to the analytical variability.
+
+
+### Sizing
+
+Is is likely that both our metrics are correlated. They both relate to proportion of cookies that click the start free trial button which end up enrolling or enrolling and payment. Therefore, using the Bonferroi correction is not very useful. The correlation of the metrics will make the Bonferroi metric to be too conservative require an unecessarly high number of pageviews.
+
+```{r}
+#p1=baseline, p2=p1+p1*pratical significance
+power.prop.test(p1=0.20, p2=0.25, sig.level=0.05, power = 0.8)
+```
+
+
+#### Number of Samples vs. Power
+
+To calculate the number of necessary pageviews for our experiment, we can use [this online calculator](http://www.evanmiller.org/ab-testing/sample-size.html).
+
+The calculator gives the following results:
+
+| Metric | Baseline conversion rate |  Mimimum Detectable Effect | Sample Size |
+|---------|-------------------------|----------------------------|------------|
+|Gross Conversion | 20.63% | 1% | 25835|
+|Net Conversion | 10.931% | 0.75% | 27413|
+
+The numbers given by the calculator are the sample size per variation. Since we will have two groups (control and experiment) we need to double those ammounts (51670 and 54826 respectively).
+
+
+To have these ammounts of cookies clicking the "Start free trial button" (our unit of analysis), we need more users visiting the homepage. We know that 8% of the unique cookies which view the page end up clicking the button. So, the needed sample sizes become 645875 for gross conversion and 685325 for net conversion. We need then 685325 total pageviews to achieve our desired power.
+
+
+#### Duration vs. Exposure
+
+In order to have 685325 samples for our experiment, we need more total pageviews on our webpage depending on how much traffic we decide to divert.
+
+The change we are testing is not so critical, since the enrolling process for the free trial already existing before which involves credit card information already existed before. We may experience a few loss of enrolments, but it seems reasonable to use around 50% of our traffic to the experiment. Note that only 8% of the unique coookies that visit the site are actually clicking the "Start free trial" button, so we're not exposing so many users to the change.
+
+Given the baseline value of 40000 pageviews per day, we can expect a duration of 35 days for our experiment, which corresponds to 5 weeks.
+
+```{r}
+sample_size <- 685325
+percent_diverted <- 0.5
+daily_pageviews <- 40000
+
+#duration is:
+sample_size/percent_diverted/daily_pageviews
+```
+
+
+## Experiment Analysis
+
+Lets first load our data:
+
+```{r}
+control <- read.csv("Control.csv", stringsAsFactors = FALSE)
+experiment <- read.csv("Experiment.csv", stringsAsFactors = FALSE)
+```
+
+### Sanity checks
+
+Lets create a function to calculate the confidence interval for counts:
+
+```{r}
+#Calculate confidence interval and observed value for counts
+calculate_ci_count <- function(n_control, n_experiment, alpha=0.05, p=0.5){
+  n <- n_control + n_experiment
+  
+  z <- -qnorm(alpha/2)
+  
+  #standard error for the proportion
+  SE <- sqrt((p * (1 - p))/n)
+  #margin of error
+  margin <- SE * z
+  
+  #observed p
+  p_obs <- n_control/n
+
+
+  #Confidence interval
+  CI <- c(p - margin, p+margin)
+  return(list("p_obs"=p_obs, "Confidence Interval"=CI))
+  
+}
+```
+
+#### Number of Cookies
+
+We see that the observed proportion of cookies in the control group is 0.5006, and the confidence interval is [0.4988, 0.5012]. Therefore, the cookies are splitted as expected between both groups.
+
+```{r}
+#expect fraction to be 0.5
+ncookies_cont <- sum(control$Pageviews)
+ncookies_exp <- sum(experiment$Pageviews)
+
+calculate_ci_count(ncookies_cont, ncookies_exp)
+```
+
+
+
+#### Number of Clicks
+
+We have a observed proportion of 0.5005 clicks in the control group and the confidence interval is [0.4959, 0.5041]. This metric also passed the sanity check.
+
+```{r}
+nclicks_cont <- sum(control$Clicks)
+nclicks_exp <- sum(experiment$Clicks)
+
+calculate_ci_count(nclicks_cont, nclicks_exp)
+```
+
+
+#### Click-through-probability
+
+For the click through probability we need a different formula:
+
+```{r}
+calculate_ci_proportion <- function(Xcont, Xexp, Ncont, Nexp, alpha=0.05, metric="invariant"){
+  #XCont - sucess on control
+  #Xexp - sucess on experiment
+  #Ncont - number of observations in control
+  #Nexp - number of observations in experiment
+  #
+  p_cont <- Xcont/Ncont
+  p_exp <- Xexp/Nexp
+  diff <- p_exp - p_cont
+  
+  if(metric == "invariant"){
+    diff_obs <- 0
+  }else if(metric == "evaluation"){
+    diff_obs <- diff
+  }else{
+    stop(paste(metric, "is not a valid value for metric. Try 'invariant' or 'evaluation'" ))
+  }
+  
+  p_pool <- (Xcont+Xexp)/(Ncont+Nexp)
+  
+  SEpool <- sqrt(p_pool * (1- p_pool) * (1/Nexp+1/Ncont))
+  
+  #alpha and z
+  alpha <- 0.05
+  z <- -qnorm(alpha/2)
+
+  #margin of error
+  margin <- z * SEpool
+  
+  CI <- c(diff_obs-margin, diff_obs+margin)
+
+  return(list("diff"=diff, "Confidence Interval"=CI))
+  
+}
+
+calculate_ci_proportion(nclicks_cont, nclicks_exp, ncookies_cont, ncookies_exp)
+```
+
+
+The observed difference in click-through-probability was 0.0001 and the confidence interval is [-0.0013, 0.0013]. The observed difference is inside the confidence interval, therefore this metric also passes the sanity check.
+
+
+### Result Analysis
+
+#### Effect Size Tests
+
+
+Analysing the effect of the experiment in the gross conversion we see significant decrease in gross conversion. The confidence interval puts the estimated difference lower than zero and lower than the pratical significance value. 
+
+```{r}
+#Gross conversion
+control_subset <- control[complete.cases(control), ]
+experiment_subset <- experiment[complete.cases(experiment), ]
+
+Xcont <- sum(control_subset$Enrollments)
+Ncont <- sum(control_subset$Clicks)
+Xexp <- sum(experiment_subset$Enrollments)
+Nexp <- sum(experiment_subset$Clicks)
+
+calculate_ci_proportion(Xcont, Xexp, Ncont, Nexp, metric="evaluation")
+
+```
+
+
+For the net conversion rate there is no significant change. The confidence interval includes zero.
+
+```{r}
+#Net Conversion
+Xcont <- sum(control_subset$Payments)
+Ncont <- sum(control_subset$Clicks)
+Xexp <- sum(experiment_subset$Payments)
+Nexp <- sum(experiment_subset$Clicks)
+
+calculate_ci_proportion(Xcont, Xexp, Ncont, Nexp, metric="evaluation")
+
+
+```
+
+#### Sign Tests
+
+
+The sign tests corresponds to make a binomial test. For the gross conversion we have a p value of 0.0026, which indicates statistical significance. There is a significant difference between the gross conversion of the control and experimental group.
+
+For the net conversion, the p value is 0.6776. There is no significant difference of net conversion between the control and experimental group.
+
+```{r}
+control_subset$gross_conversion <- control_subset$Enrollments / control_subset$Clicks
+
+control_subset$net_conversion <- control_subset$Payments / control_subset$Clicks
+
+experiment_subset$gross_conversion <- experiment_subset$Enrollments / experiment_subset$Clicks
+
+experiment_subset$net_conversion <- experiment_subset$Payments / experiment_subset$Clicks
+
+sign_test_gross <- control_subset$gross_conversion - experiment_subset$gross_conversion
+
+ammount_plus_gross <- sum(sign_test_gross > 0)
+n <- length(sign_test_gross)
+binom.test(ammount_plus_gross, n)
+
+sign_test_net <- control_subset$net_conversion - experiment_subset$net_conversion
+
+ammount_plus_net <- sum(sign_test_net > 0)
+n <- length(sign_test_net)
+binom.test(ammount_plus_net, n)
+
+```
+
+#### Summary
+
+The Bonferroni correction was not use because it is too convervative when analyising two correlated metrics. From the effect size tests we observe a significant difference in the gross conversion and no significant difference in the net conversion. THe sign tests agree with this conclusions.
+
+### Recommendation
+
+Let us go back to our initial hypothesis:
+
+> The hypothesis was that this might set clearer expectations for students upfront, thus reducing the number of frustrated students who left the free trial because they didn't have enough time—without significantly reducing the number of students to continue past the free trial and eventually complete the course. If this hypothesis held true, Udacity could improve the overall student experience and improve coaches' capacity to support students who are likely to complete the course.
+
+So, the gross conversion was reduced but the net conversion stayed the same. It seems we achieved our goal of reducing the number of students which enroll and my become frustated and we did not redice the number of students to continue past the free trial. So, my recommendation is to __launch the experiment!__
+
+## Follow-up Experiment
+
+To reduce the number of frustrated students who cancel early in the course we need to think a bit about the reasons that are behind the early cancelations. Maybe even make a survey! However, if the studends were not so engaged in the course, maybe they would also not be willing to take part in a survey.
+
+From my point of view, studends my feel frustrated if they feel they are not making progress or if they struggle in the new part of the material.
+
+One idea for an experiment would be to send an email to the studends after the first week of enrollment reminding them of the support options they have. Something along the lines of:
+
+> "Hey, if you're having trouble with the course, don't hesitate to ask for help in the forums! Our coaches are there to help!"
+
+The hypothesis is that if the students are reminded of support options they will become more engaged after exposing their questions and getting good support. This change could increase the retention of the course. The metric to measure is therefore the Retention (number of students who pay / number of students who enrolled). The unit of diversion would be the unique user id, because we only want to send emails to students wich have already enrolled.
+
+
+
+
+
+
+
+
+
+
+
+
