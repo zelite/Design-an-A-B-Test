@@ -162,7 +162,7 @@ $(document).ready(function () {
 <h4>Evaluation metrics</h4>
 <ul>
 <li><p><strong>Gross conversion</strong>: the gross conversion tells us the percentage of students that enroll on the course after clicking the “Start free trial button”. This is a good metric for how experiment because it allows us to measure if there is an effect of the experiment screener on the enrolling. If our hypothesis turns out to be true, we expect the gross conversion to decrease, since students which to not have so much time to commit are less likely to enroll.</p></li>
-<li><p><strong>Net conversion</strong>: Net conversion tells us which students stay enrolled and end up making at least a payment. We want our experiment to not affect the net conversion. We want to keep the same proportion of students to stay enrolled and payment.</p></li>
+<li><p><strong>Net conversion</strong>: Net conversion tells us which students stay enrolled and end up making at least a payment. We want our experiment to not reduce the net conversion. We want to keep the same or increase the proportion of students that stay enrolled and pay.</p></li>
 </ul>
 </div>
 <div id="unused-metrics" class="section level4">
@@ -198,20 +198,6 @@ sd_proportion(0.1093125, n)</code></pre>
 </div>
 <div id="sizing" class="section level3">
 <h3>Sizing</h3>
-<p>Is is likely that both our metrics are correlated. They both relate to proportion of cookies that click the start free trial button which end up enrolling or enrolling and payment. Therefore, using the Bonferroi correction is not very useful. The correlation of the metrics will make the Bonferroi metric to be too conservative require an unecessarly high number of pageviews.</p>
-<pre class="r"><code>#p1=baseline, p2=p1+p1*pratical significance
-power.prop.test(p1=0.20, p2=0.25, sig.level=0.05, power = 0.8)</code></pre>
-<pre><code>## 
-##      Two-sample comparison of proportions power calculation 
-## 
-##               n = 1093.739
-##              p1 = 0.2
-##              p2 = 0.25
-##       sig.level = 0.05
-##           power = 0.8
-##     alternative = two.sided
-## 
-## NOTE: n is number in *each* group</code></pre>
 <div id="number-of-samples-vs.power" class="section level4">
 <h4>Number of Samples vs. Power</h4>
 <p>To calculate the number of necessary pageviews for our experiment, we can use <a href="http://www.evanmiller.org/ab-testing/sample-size.html">this online calculator</a>.</p>
@@ -246,15 +232,17 @@ power.prop.test(p1=0.20, p2=0.25, sig.level=0.05, power = 0.8)</code></pre>
 <div id="duration-vs.exposure" class="section level4">
 <h4>Duration vs. Exposure</h4>
 <p>In order to have 685325 samples for our experiment, we need more total pageviews on our webpage depending on how much traffic we decide to divert.</p>
-<p>The change we are testing is not so critical, since the enrolling process for the free trial already existing before which involves credit card information already existed before. We may experience a few loss of enrolments, but it seems reasonable to use around 50% of our traffic to the experiment. Note that only 8% of the unique coookies that visit the site are actually clicking the “Start free trial” button, so we’re not exposing so many users to the change.</p>
-<p>Given the baseline value of 40000 pageviews per day, we can expect a duration of 35 days for our experiment, which corresponds to 5 weeks.</p>
+<p>The change we are testing is not so critical, since the enrolling process for the free trial already existing before which involves credit card information already existed before.</p>
+<p>There is not chance of anyone getting hurt because of the duration of our experiment. The experiment is just an extra question asking how much time they have to dedicate to the course. We also do not collect any extra sensitive data than before.</p>
+<p>We may experience a few loss of enrolments, but it seems reasonable to use around all of our traffic to the experiment. Note that only 8% of the unique coookies that visit the site are actually clicking the “Start free trial” button, so we’re not exposing so many users to the change.</p>
+<p>Given the baseline value of 40000 pageviews per day, we can expect a duration of 18 days for our experiment, which corresponds to roughly 2.5 weeks.</p>
 <pre class="r"><code>sample_size &lt;- 685325
-percent_diverted &lt;- 0.5
+percent_diverted &lt;- 1
 daily_pageviews &lt;- 40000
 
 #duration is:
 sample_size/percent_diverted/daily_pageviews</code></pre>
-<pre><code>## [1] 34.26625</code></pre>
+<pre><code>## [1] 17.13312</code></pre>
 </div>
 </div>
 </div>
@@ -364,7 +352,7 @@ calculate_ci_proportion(nclicks_cont, nclicks_exp, ncookies_cont, ncookies_exp)<
 <h3>Result Analysis</h3>
 <div id="effect-size-tests" class="section level4">
 <h4>Effect Size Tests</h4>
-<p>Analysing the effect of the experiment in the gross conversion we see significant decrease in gross conversion. The confidence interval puts the estimated difference lower than zero and lower than the pratical significance value.</p>
+<p>Analysing the effect of the experiment in the gross conversion we see significant decrease in gross conversion. The confidence interval puts the estimated difference lower than zero and lower than the pratical significance value. The difference in gross conversion is statistically and pratically significant.</p>
 <pre class="r"><code>#Gross conversion
 control_subset &lt;- control[complete.cases(control), ]
 experiment_subset &lt;- experiment[complete.cases(experiment), ]
@@ -380,7 +368,7 @@ calculate_ci_proportion(Xcont, Xexp, Ncont, Nexp, metric=&quot;evaluation&quot;)
 ## 
 ## $`Confidence Interval`
 ## [1] -0.02912320 -0.01198655</code></pre>
-<p>For the net conversion rate there is no significant change. The confidence interval includes zero.</p>
+<p>For the net conversion rate there is no significant change. The confidence interval includes zero. The change in conversion rate is not statistically significant and not pratically significant. However, because the lower margin of confidence interval is lower than the negative pratical significance, there’s a chance that the net conversion may be reduced to a level that matters to the bussiness.</p>
 <pre class="r"><code>#Net Conversion
 Xcont &lt;- sum(control_subset$Payments)
 Ncont &lt;- sum(control_subset$Clicks)
@@ -442,16 +430,19 @@ binom.test(ammount_plus_net, n)</code></pre>
 </div>
 <div id="summary" class="section level4">
 <h4>Summary</h4>
-<p>The Bonferroni correction was not use because it is too convervative when analyising two correlated metrics. From the effect size tests we observe a significant difference in the gross conversion and no significant difference in the net conversion. THe sign tests agree with this conclusions.</p>
+<p>It would make sense to use the Bonferroni correction if the decision for launching our experiment was based on a significant change of <em>any</em> of the evaluation metrics. The Bonferroni correction goal is to reduce the chance of false positives (type I error) in the individual metrics, but it does so at the expense of increasing the chance of false negatives (type II error). In this experiment we are only interested in implementing a change if <em>all</em> our metrics meat the criteria (significant decrease of gross conversion, no significant decrease in net conversion). Requiring <em>all</em> metrics makes our experiment already vunerable to type II errors, which would not be helped by using the Bonferroni correction. (Wikipedia, 2016, Davies, 2010, Discussions.udacity.com, 2016)</p>
+<p>Is is likely that both our metrics are correlated. They both relate to proportion of cookies that click the start free trial button which end up enrolling or enrolling and payment. Therefore, using the Bonferroi correction is not very useful. The correlation of the metrics will make the Bonferroi metric to be too conservative require an unecessarly high number of pageviews.</p>
+<p>From the effect size tests we observe a significant difference in the gross conversion and no significant difference in the net conversion. The sign tests agree with this conclusions.</p>
 </div>
 </div>
 <div id="recommendation" class="section level3">
 <h3>Recommendation</h3>
 <p>Let us go back to our initial hypothesis:</p>
 <blockquote>
-<p>The hypothesis was that this might set clearer expectations for students upfront, thus reducing the number of frustrated students who left the free trial because they didn’t have enough time—without significantly reducing the number of students to continue past the free trial and eventually complete the course. If this hypothesis held true, Udacity could improve the overall student experience and improve coaches’ capacity to support students who are likely to complete the course.</p>
+<p>The hypothesis was that this might set clearer expectations for students upfront, thus reducing the number of frustrated students who left the free trial because they didn’t have enough time - without significantly reducing the number of students to continue past the free trial and eventually complete the course. If this hypothesis held true, Udacity could improve the overall student experience and improve coaches’ capacity to support students who are likely to complete the course.</p>
 </blockquote>
-<p>So, the gross conversion was reduced but the net conversion stayed the same. It seems we achieved our goal of reducing the number of students which enroll and my become frustated and we did not redice the number of students to continue past the free trial. So, my recommendation is to <strong>launch the experiment!</strong></p>
+<p>So, the gross conversion was reduced but the net conversion stayed the same. It seems we achieved our goal of reducing the number of students which enroll and my become frustated and we did not reduce the number of students to continue past the free trial.</p>
+<p>However, having a look at the net conversion results, we see that the lower margin of the confidence interval is lower than the negative pratical significance boundary. This means there is a chance that there is a decrease of net conversion that may be relevant to the Udacity bussiness. Given this fact, we should be careful and make further experiments to understand if this risk is real. So, my recommendation at this stage is to <strong>not launch the experiment!</strong></p>
 </div>
 </div>
 <div id="follow-up-experiment" class="section level2">
@@ -462,7 +453,15 @@ binom.test(ammount_plus_net, n)</code></pre>
 <blockquote>
 <p>“Hey, if you’re having trouble with the course, don’t hesitate to ask for help in the forums! Our coaches are there to help!”</p>
 </blockquote>
-<p>The hypothesis is that if the students are reminded of support options they will become more engaged after exposing their questions and getting good support. This change could increase the retention of the course. The metric to measure is therefore the Retention (number of students who pay / number of students who enrolled). The unit of diversion would be the unique user id, because we only want to send emails to students wich have already enrolled.</p>
+<p>The hypothesis is that if the students are reminded of support options they will become more engaged after exposing their questions and getting good support. This change could increase the retention of the course. The metric to measure is therefore the Retention (number of students who pay / number of students who enrolled). A invariant metric for this experiment would be the unique user id, since we want to have the same ammount of users in the control and experiment group. The unit of diversion would be the unique user id, because we only want to send emails to students wich have already enrolled.</p>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<ul>
+<li><p>Wikipedia. (2016). <em>Bonferroni correction.</em> [online] Available at: <a href="https://en.wikipedia.org/wiki/Bonferroni_correction" class="uri">https://en.wikipedia.org/wiki/Bonferroni_correction</a> [Accessed 30 Jul. 2016].</p></li>
+<li><p>Discussions.udacity.com. (2016). <em>Udacity | Free Online Courses &amp; Nanodegree Programs - Udacity.</em> [online] Available at: <a href="https://discussions.udacity.com/t/when-to-use-bonferroni-correction/37713/4" class="uri">https://discussions.udacity.com/t/when-to-use-bonferroni-correction/37713/4</a> [Accessed 30 Jul. 2016].</p></li>
+<li><p>Davies, W. (2010). <em>What the hell is Bonferroni correction? | Generally Thinking.</em> [online] Generallythinking.com. Available at: <a href="http://generallythinking.com/what-the-hell-is-bonferroni-correction/" class="uri">http://generallythinking.com/what-the-hell-is-bonferroni-correction/</a> [Accessed 30 Jul. 2016].</p></li>
+</ul>
 </div>
 
 
